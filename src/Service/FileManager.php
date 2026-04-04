@@ -183,7 +183,7 @@ final class FileManager implements FileManagerInterface
 
     private function ensureDirectoryExists(string $directory): void
     {
-        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+        if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
             throw new FileException(sprintf('Directory "%s" was not created', $directory));
         }
     }

@@ -9,6 +9,7 @@ use MulerTech\FileBundle\Entity\ConcreteFile;
 use MulerTech\FileBundle\Model\FileUploaderInterface;
 use MulerTech\FileBundle\Service\FileManager;
 use MulerTech\FileBundle\Storage\DefaultDirectoryStrategy;
+use MulerTech\FileBundle\Storage\DirectoryStrategyInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -196,6 +197,120 @@ final class FileManagerTest extends TestCase
         self::assertContains('PDF', $extensions);
         self::assertContains('DOC', $extensions);
         self::assertContains('PNG', $extensions);
+    }
+
+    public function testUploadPassesContextToDirectoryStrategy(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('persist');
+        $entityManager->expects(self::once())->method('flush');
+
+        $context = new \stdClass();
+
+        $strategy = $this->createMock(DirectoryStrategyInterface::class);
+        $strategy->expects(self::once())
+            ->method('getRelativeDirectory')
+            ->with($this->uploader, $context)
+            ->willReturn('project_42');
+
+        $fileManager = new FileManager(
+            entityManager: $entityManager,
+            slugger: $this->slugger,
+            logger: new NullLogger(),
+            directoryStrategy: $strategy,
+            storageDirectory: $this->storageDirectory,
+            fileClass: ConcreteFile::class,
+        );
+
+        $uploadedFile = $this->createTempUploadedFile('test.txt', 'text/plain', 'Hello');
+        $file = $fileManager->upload($uploadedFile, $this->uploader, $context);
+
+        self::assertStringStartsWith('project_42/', $file->getFilepath());
+    }
+
+    public function testUploadFallsBackToBinExtension(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('persist');
+        $entityManager->expects(self::once())->method('flush');
+
+        $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('getClientOriginalName')->willReturn('noext');
+        $uploadedFile->method('getClientOriginalExtension')->willReturn('');
+        $uploadedFile->method('guessExtension')->willReturn(null);
+        $uploadedFile->method('getSize')->willReturn(5);
+        $uploadedFile->method('getMimeType')->willReturn('text/plain');
+        $uploadedFile->method('getContent')->willReturn('hello');
+        $uploadedFile->method('getPathname')->willReturn('/tmp/noext');
+
+        $fileManager = $this->createFileManager($entityManager);
+        $file = $fileManager->upload($uploadedFile, $this->uploader);
+
+        self::assertSame('bin', $file->getExtension());
+    }
+
+    public function testUploadWithEmptyFileContentThrowsException(): void
+    {
+        $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('getClientOriginalName')->willReturn('empty.txt');
+        $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
+        $uploadedFile->method('getSize')->willReturn(5);
+        $uploadedFile->method('getMimeType')->willReturn('text/plain');
+        $uploadedFile->method('getContent')->willReturn('');
+        $uploadedFile->method('getPathname')->willReturn('/tmp/empty.txt');
+
+        $fileManager = $this->createFileManager();
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('Cannot read uploaded file content');
+
+        $fileManager->upload($uploadedFile, $this->uploader);
+    }
+
+    public function testUploadWithUnexpectedErrorWrapsException(): void
+    {
+        $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('getClientOriginalName')->willReturn('test.txt');
+        $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
+        $uploadedFile->method('getSize')->willReturn(100);
+        $uploadedFile->method('getMimeType')->willReturn('text/plain');
+        $uploadedFile->method('getContent')->willThrowException(new \RuntimeException('disk error'));
+
+        $fileManager = $this->createFileManager();
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('Unexpected error during file upload');
+
+        $fileManager->upload($uploadedFile, $this->uploader);
+    }
+
+    public function testDeleteWhenFileNotOnDisk(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('remove');
+        $entityManager->expects(self::once())->method('flush');
+
+        $fileManager = $this->createFileManager($entityManager);
+
+        $file = new ConcreteFile();
+        $file->setFilepath('nonexistent/file.txt');
+        $file->setFilename('file.txt');
+
+        $fileManager->delete($file);
+    }
+
+    public function testEnsureDirectoryExistsFailureThrowsException(): void
+    {
+        $blockingFile = $this->storageDirectory.'/uploader_1';
+        file_put_contents($blockingFile, 'blocking');
+
+        $fileManager = $this->createFileManager();
+        $uploadedFile = $this->createTempUploadedFile('test.txt', 'text/plain', 'content');
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('was not created');
+
+        $fileManager->upload($uploadedFile, $this->uploader);
     }
 
     /**
