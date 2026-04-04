@@ -1,0 +1,50 @@
+{
+    "name": "mulertech/file-bundle",
+    "description": "Symfony bundle for file upload management with metadata tracking, configurable validation, and extensible entity",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": ["php", "symfony", "file", "upload", "file-management", "storage", "metadata"],
+    "authors": [
+        {
+            "name": "S\u00e9bastien Muler",
+            "email": "sebastien.muler@mulertech.net"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "doctrine/dbal": "^3.0 || ^4.0",
+        "doctrine/orm": "^2.19 || ^3.0",
+        "psr/log": "^3.0",
+        "symfony/config": "^6.4 || ^7.0",
+        "symfony/dependency-injection": "^6.4 || ^7.0",
+        "symfony/http-foundation": "^6.4 || ^7.0",
+        "symfony/http-kernel": "^6.4 || ^7.0",
+        "symfony/mime": "^6.4 || ^7.0",
+        "symfony/string": "^6.4 || ^7.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "mulertech/docker-dev": "^3.2",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^12.0",
+        "roave/security-advisories": "dev-latest",
+        "twig/twig": "^3.0"
+    },
+    "suggest": {
+        "twig/twig": "Required to use the file_exists_on_disk() and format_file_size() Twig functions"
+    },
+    "autoload": {
+        "psr-4": {
+            "MulerTech\\FileBundle\\": "./src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MulerTech\\FileBundle\\Tests\\": "./tests"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}
