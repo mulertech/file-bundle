@@ -299,6 +299,70 @@ final class FileManagerTest extends TestCase
         $fileManager->delete($file);
     }
 
+    public function testDeleteLogsWarningWhenUnlinkFails(): void
+    {
+        $dir = $this->storageDirectory.'/unlink_target';
+        mkdir($dir, 0700, true);
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('remove');
+        $entityManager->expects(self::once())->method('flush');
+
+        $fileManager = $this->createFileManager($entityManager);
+
+        $file = new ConcreteFile();
+        $file->setFilepath('unlink_target');
+        $file->setFilename('unlink_target');
+
+        $fileManager->delete($file);
+    }
+
+    public function testUploadFailsWhenCannotWriteFile(): void
+    {
+        $longName = str_repeat('a', 300).'.txt';
+
+        $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('getClientOriginalName')->willReturn($longName);
+        $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
+        $uploadedFile->method('getSize')->willReturn(5);
+        $uploadedFile->method('getMimeType')->willReturn('text/plain');
+        $uploadedFile->method('getContent')->willReturn('hello');
+        $uploadedFile->method('getPathname')->willReturn('/tmp/test.txt');
+
+        $fileManager = $this->createFileManager();
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('Cannot write file to destination directory');
+
+        $fileManager->upload($uploadedFile, $this->uploader);
+    }
+
+    public function testUploadFailsWhenFileNotSavedCorrectly(): void
+    {
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+
+        $fileManager = new class(
+            entityManager: $entityManager,
+            slugger: $this->slugger,
+            logger: new NullLogger(),
+            directoryStrategy: new DefaultDirectoryStrategy(),
+            storageDirectory: $this->storageDirectory,
+            fileClass: ConcreteFile::class,
+        ) extends FileManager {
+            protected function fileExistsAtPath(string $path): bool
+            {
+                return false;
+            }
+        };
+
+        $uploadedFile = $this->createTempUploadedFile('ghost.txt', 'text/plain', 'content');
+
+        $this->expectException(FileException::class);
+        $this->expectExceptionMessage('File was not saved correctly');
+
+        $fileManager->upload($uploadedFile, $this->uploader);
+    }
+
     public function testEnsureDirectoryExistsFailureThrowsException(): void
     {
         $blockingFile = $this->storageDirectory.'/uploader_1';

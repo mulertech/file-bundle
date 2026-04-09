@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
-final class FileManager implements FileManagerInterface
+class FileManager implements FileManagerInterface
 {
     private const array DEFAULT_ALLOWED_MIME_TYPES = [
         'application/pdf',
@@ -118,7 +118,7 @@ final class FileManager implements FileManagerInterface
     {
         $absolutePath = $this->storageDirectory.'/'.$file->getFilepath();
 
-        if (file_exists($absolutePath) && !unlink($absolutePath)) {
+        if (file_exists($absolutePath) && !@unlink($absolutePath)) {
             $this->logger->warning('Failed to delete file from filesystem', [
                 'file_id' => $file->getId(),
                 'filepath' => $absolutePath,
@@ -201,7 +201,7 @@ final class FileManager implements FileManagerInterface
                 throw new FileException('Cannot read uploaded file content.');
             }
 
-            $bytesWritten = file_put_contents($destinationPath, $fileContent);
+            $bytesWritten = @file_put_contents($destinationPath, $fileContent);
 
             if (false === $bytesWritten) {
                 $this->logger->error('Failed to write file to destination', [
@@ -210,7 +210,7 @@ final class FileManager implements FileManagerInterface
                 throw new FileException('Cannot write file to destination directory.');
             }
 
-            if (!file_exists($destinationPath)) {
+            if (!$this->fileExistsAtPath($destinationPath)) {
                 throw new FileException('File was not saved correctly.');
             }
 
@@ -232,6 +232,11 @@ final class FileManager implements FileManagerInterface
             ]);
             throw new FileException('Unexpected error during file upload: '.$e->getMessage());
         }
+    }
+
+    protected function fileExistsAtPath(string $path): bool
+    {
+        return file_exists($path);
     }
 
     private function createFileEntity(): FileInterface
