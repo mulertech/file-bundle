@@ -4,7 +4,6 @@ ___
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/mulertech/file-bundle.svg?style=flat-square)](https://packagist.org/packages/mulertech/file-bundle)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/file-bundle/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mulertech/file-bundle/actions/workflows/tests.yml)
 [![GitHub PHPStan Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/file-bundle/phpstan.yml?branch=main&label=phpstan&style=flat-square)](https://github.com/mulertech/file-bundle/actions/workflows/phpstan.yml)
-[![GitHub Security Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/file-bundle/security.yml?branch=main&label=security&style=flat-square)](https://github.com/mulertech/file-bundle/actions/workflows/security.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/mulertech/file-bundle.svg?style=flat-square)](https://packagist.org/packages/mulertech/file-bundle)
 [![Test Coverage](https://raw.githubusercontent.com/mulertech/file-bundle/badge/badge-coverage.svg)](https://packagist.org/packages/mulertech/file-bundle)
 ___
@@ -14,7 +13,7 @@ Symfony bundle for file upload management with metadata tracking, configurable v
 ## Requirements
 
 - PHP 8.4+
-- Symfony 6.4+ or 7.0+
+- Symfony 6.4+, 7.0+ or 8.0+
 - Doctrine ORM 2.19+ or 3.0+
 
 ## Installation
