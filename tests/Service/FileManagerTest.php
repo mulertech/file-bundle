@@ -10,6 +10,8 @@ use MulerTech\FileBundle\Model\FileUploaderInterface;
 use MulerTech\FileBundle\Service\FileManager;
 use MulerTech\FileBundle\Storage\DefaultDirectoryStrategy;
 use MulerTech\FileBundle\Storage\DirectoryStrategyInterface;
+use MulerTech\FileBundle\Storage\StorageTargetInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -226,6 +228,87 @@ final class FileManagerTest extends TestCase
         $file = $fileManager->upload($uploadedFile, $this->uploader, $context);
 
         self::assertStringStartsWith('project_42/', $file->getFilepath());
+    }
+
+    public function testStorageTargetChoosesDirectoryAndNameOverTheStrategy(): void
+    {
+        $strategy = $this->createMock(DirectoryStrategyInterface::class);
+        $strategy->expects(self::never())->method('getRelativeDirectory');
+
+        $fileManager = new FileManager(
+            entityManager: $this->createStub(EntityManagerInterface::class),
+            slugger: $this->slugger,
+            logger: new NullLogger(),
+            directoryStrategy: $strategy,
+            storageDirectory: $this->storageDirectory,
+            fileClass: ConcreteFile::class,
+        );
+
+        $file = $fileManager->upload(
+            $this->createTempUploadedFile('notes.txt', 'text/plain', 'Hello'),
+            $this->uploader,
+            $this->target('blog/files', 'file-12-notes-'),
+        );
+
+        self::assertMatchesRegularExpression('~^file-12-notes-[0-9a-f]+\.\d+\.txt$~', $file->getStoredFilename());
+        self::assertSame('blog/files/'.$file->getStoredFilename(), $file->getFilepath());
+        self::assertFileExists($this->storageDirectory.'/'.$file->getFilepath());
+        self::assertSame('notes.txt', $file->getFilename());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unsafeDirectories(): iterable
+    {
+        yield 'parent' => ['blog/../../etc'];
+        yield 'absolute' => ['/var/www'];
+        yield 'trailing slash' => ['blog/'];
+        yield 'empty' => [''];
+    }
+
+    #[DataProvider('unsafeDirectories')]
+    public function testStorageTargetDirectoryOutsideTheStorageIsRefused(string $directory): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(sprintf('gives the directory "%s"', $directory));
+
+        $this->createFileManager()->upload(
+            $this->createTempUploadedFile('notes.txt', 'text/plain', 'Hello'),
+            $this->uploader,
+            $this->target($directory, 'file-'),
+        );
+    }
+
+    public function testStorageTargetPrefixWithAPathIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('gives the file name prefix "../file-"');
+
+        $this->createFileManager()->upload(
+            $this->createTempUploadedFile('notes.txt', 'text/plain', 'Hello'),
+            $this->uploader,
+            $this->target('blog', '../file-'),
+        );
+    }
+
+    private function target(string $directory, string $prefix): StorageTargetInterface
+    {
+        return new readonly class($directory, $prefix) implements StorageTargetInterface {
+            public function __construct(private string $directory, private string $prefix)
+            {
+            }
+
+            public function getRelativeDirectory(): string
+            {
+                return $this->directory;
+            }
+
+            public function getFilenamePrefix(): string
+            {
+                return $this->prefix;
+            }
+        };
     }
 
     public function testUploadFallsBackToBinExtension(): void

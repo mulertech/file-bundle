@@ -120,7 +120,39 @@ mulertech_file:
     directory_strategy: App\Storage\ProjectDirectoryStrategy
 ```
 
-### 5. Twig functions
+### 5. Storage target (for bundles)
+
+A bundle storing files that must be laid out the same way on every site passes as context an object implementing `StorageTargetInterface`. It gives the directory and the start of the stored name itself, and the site's directory strategy is not consulted:
+
+```php
+use MulerTech\FileBundle\Storage\StorageTargetInterface;
+
+final readonly class CoverTarget implements StorageTargetInterface
+{
+    public function __construct(private int $postId)
+    {
+    }
+
+    public function getRelativeDirectory(): string
+    {
+        return 'blog/images';
+    }
+
+    public function getFilenamePrefix(): string
+    {
+        return sprintf('image-%d-', $this->postId);
+    }
+}
+
+$file = $fileManager->upload($uploadedFile, $user, new CoverTarget($post->getId()), true);
+// blog/images/image-12-6650c1f2a3b4e1.23456789.webp
+```
+
+The unique part and the extension follow the prefix. The directory is made of segments of letters, digits, `_` and `-` joined by `/`, the prefix of the same characters without `/`; anything else (`..`, an absolute path) is refused with an `InvalidArgumentException` naming the target, since it would write outside the storage directory.
+
+The uploader is not stored on the file: it only feeds the directory strategy and the upload log. Deleting a user deletes none of their files, unless the site's own file entity links the two with a cascade.
+
+### 6. Twig functions
 
 ```twig
 {% if file_exists_on_disk(file) %}

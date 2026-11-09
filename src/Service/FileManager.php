@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use MulerTech\FileBundle\Model\FileInterface;
 use MulerTech\FileBundle\Model\FileUploaderInterface;
 use MulerTech\FileBundle\Storage\DirectoryStrategyInterface;
+use MulerTech\FileBundle\Storage\StorageTargetInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -79,12 +80,15 @@ class FileManager implements FileManagerInterface
         $this->validateFile($file);
 
         $originalFilename = pathinfo($file->getClientOriginalName(), \PATHINFO_FILENAME);
-        $safeFilename = $this->slugger->slug($originalFilename);
         $extension = $file->getClientOriginalExtension() ?: ($file->guessExtension() ?? 'bin');
 
-        $storedFilename = $safeFilename.'-'.uniqid('', true).'.'.$extension;
-
-        $relativeDirectory = $this->directoryStrategy->getRelativeDirectory($uploader, $context);
+        if ($context instanceof StorageTargetInterface) {
+            $relativeDirectory = $this->targetDirectory($context);
+            $storedFilename = $this->targetPrefix($context).uniqid('', true).'.'.$extension;
+        } else {
+            $relativeDirectory = $this->directoryStrategy->getRelativeDirectory($uploader, $context);
+            $storedFilename = $this->slugger->slug($originalFilename).'-'.uniqid('', true).'.'.$extension;
+        }
         $absoluteDirectory = $this->storageDirectory.'/'.$relativeDirectory;
 
         $this->ensureDirectoryExists($absoluteDirectory);
@@ -179,6 +183,33 @@ class FileManager implements FileManagerInterface
         if (!\in_array($mimeType, $this->allowedMimeTypes, true)) {
             throw new FileException(sprintf('File type "%s" is not allowed. Allowed types: %s', $mimeType, implode(', ', $this->allowedMimeTypes)));
         }
+    }
+
+    /**
+     * Checked rather than cleaned: a target giving `../` or an absolute path would write
+     * outside the storage directory, and one silently rewritten would store its files
+     * somewhere nobody chose.
+     */
+    private function targetDirectory(StorageTargetInterface $target): string
+    {
+        $directory = $target->getRelativeDirectory();
+
+        if (1 !== preg_match('~^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$~', $directory)) {
+            throw new \InvalidArgumentException(sprintf('%s gives the directory "%s": expected segments of letters, digits, "_" and "-" joined by "/", such as "blog/images".', $target::class, $directory));
+        }
+
+        return $directory;
+    }
+
+    private function targetPrefix(StorageTargetInterface $target): string
+    {
+        $prefix = $target->getFilenamePrefix();
+
+        if (1 !== preg_match('~^[A-Za-z0-9_-]*$~', $prefix)) {
+            throw new \InvalidArgumentException(sprintf('%s gives the file name prefix "%s": expected letters, digits, "_" and "-" only, such as "image-12-".', $target::class, $prefix));
+        }
+
+        return $prefix;
     }
 
     private function ensureDirectoryExists(string $directory): void
