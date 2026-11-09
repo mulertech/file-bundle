@@ -1,5 +1,19 @@
 # Release notes for file-bundle
 
+## v1.2.0 - 2026-11-09
+
+A bundle can choose where its files are stored, the same way on every site.
+
+### Added
+
+- `StorageTargetInterface`: an upload context that implements it sets the directory (for example `blog/images`) and the start of the stored file name (for example `image-12-`). The site's directory strategy is not used for that upload. The unique part and the extension are added after the prefix.
+- A target whose directory or prefix would write outside the storage directory is refused with an `InvalidArgumentException` naming the target. This covers `..`, an absolute path and a `/` in the prefix.
+
+### Unchanged
+
+- Any other upload context still goes through the site's directory strategy.
+- Files already stored keep their path: each file's path is saved on the file itself.
+
 ## v1.1.0 - 2026-06-04
 
 ### v1.1.0
