@@ -92,6 +92,24 @@ class FileController
 }
 ```
 
+`upload()` throws two kinds of `FileException`, which call for different answers:
+
+- `MulerTech\FileBundle\Exception\FileRejected`: the file is too large (for the bundle or for PHP's `upload_max_filesize`) or of a type not allowed. The sender can fix it by sending another file, so tell them why. `reason` (`FileRejectionReason::TooLarge` or `TypeNotAllowed`), `filename`, `maxSize` (bytes) and `mimeType` let you write that message in your own language.
+- any other `FileException`: the server failed to receive or store the file. Nothing the sender does will fix it, so report it as an error.
+
+```php
+use MulerTech\FileBundle\Exception\FileRejected;
+use Symfony\Component\HttpFoundation\File\Exception\FileException;
+
+try {
+    $file = $fileManager->upload($uploadedFile, $user);
+} catch (FileRejected $rejected) {
+    // show the reason to the sender
+} catch (FileException $failure) {
+    $logger->error('File upload failed', ['exception' => $failure]);
+}
+```
+
 ### 4. Custom directory strategy (optional)
 
 Implement `DirectoryStrategyInterface` to control where files are stored:

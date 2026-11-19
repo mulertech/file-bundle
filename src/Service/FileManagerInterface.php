@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace MulerTech\FileBundle\Service;
 
+use MulerTech\FileBundle\Exception\FileRejected;
 use MulerTech\FileBundle\Model\FileInterface;
 use MulerTech\FileBundle\Model\FileUploaderInterface;
+use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 interface FileManagerInterface
 {
+    /**
+     * @throws FileRejected  when the file is too large or of a type not allowed
+     * @throws FileException when the file could not be received or stored
+     */
     public function upload(
         UploadedFile $file,
         FileUploaderInterface $uploader,

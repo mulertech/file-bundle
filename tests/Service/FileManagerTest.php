@@ -6,6 +6,8 @@ namespace MulerTech\FileBundle\Tests\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
 use MulerTech\FileBundle\Entity\ConcreteFile;
+use MulerTech\FileBundle\Exception\FileRejected;
+use MulerTech\FileBundle\Exception\FileRejectionReason;
 use MulerTech\FileBundle\Model\FileUploaderInterface;
 use MulerTech\FileBundle\Service\FileManager;
 use MulerTech\FileBundle\Storage\DefaultDirectoryStrategy;
@@ -102,10 +104,44 @@ final class FileManagerTest extends TestCase
 
         $uploadedFile = $this->createTempUploadedFile('big.txt', 'text/plain', str_repeat('x', 100));
 
-        $this->expectException(FileException::class);
-        $this->expectExceptionMessage('exceeds maximum allowed size');
+        try {
+            $fileManager->upload($uploadedFile, $this->uploader);
+            self::fail('An oversized file must be rejected.');
+        } catch (FileRejected $rejected) {
+            self::assertSame(FileRejectionReason::TooLarge, $rejected->reason);
+            self::assertSame('big.txt', $rejected->filename);
+            self::assertSame(10, $rejected->maxSize);
+            self::assertStringContainsString('exceeds maximum allowed size', $rejected->getMessage());
+        }
+    }
 
-        $fileManager->upload($uploadedFile, $this->uploader);
+    public function testUploadRejectsFileStoppedByThePhpSizeLimit(): void
+    {
+        $fileManager = $this->createFileManager();
+        $uploadedFile = new UploadedFile(sys_get_temp_dir().'/never-written.txt', 'huge.pdf', 'application/pdf', \UPLOAD_ERR_INI_SIZE, true);
+
+        try {
+            $fileManager->upload($uploadedFile, $this->uploader);
+            self::fail('A file stopped by PHP for its size must be rejected.');
+        } catch (FileRejected $rejected) {
+            self::assertSame(FileRejectionReason::TooLarge, $rejected->reason);
+            self::assertSame('huge.pdf', $rejected->filename);
+            self::assertSame((int) UploadedFile::getMaxFilesize(), $rejected->maxSize);
+        }
+    }
+
+    public function testUploadNotReceivedIsAFaultNotARejection(): void
+    {
+        $fileManager = $this->createFileManager();
+        $uploadedFile = new UploadedFile(sys_get_temp_dir().'/never-written.txt', 'report.pdf', 'application/pdf', \UPLOAD_ERR_NO_TMP_DIR, true);
+
+        try {
+            $fileManager->upload($uploadedFile, $this->uploader);
+            self::fail('A file that was not received must fail.');
+        } catch (FileException $failure) {
+            self::assertNotInstanceOf(FileRejected::class, $failure);
+            self::assertStringContainsString('File "report.pdf" was not received', $failure->getMessage());
+        }
     }
 
     public function testUploadRejectsDisallowedMimeType(): void
@@ -114,10 +150,15 @@ final class FileManagerTest extends TestCase
 
         $uploadedFile = $this->createTempUploadedFile('test.txt', 'text/plain', 'plain text content');
 
-        $this->expectException(FileException::class);
-        $this->expectExceptionMessage('is not allowed');
-
-        $fileManager->upload($uploadedFile, $this->uploader);
+        try {
+            $fileManager->upload($uploadedFile, $this->uploader);
+            self::fail('A file of a type not allowed must be rejected.');
+        } catch (FileRejected $rejected) {
+            self::assertSame(FileRejectionReason::TypeNotAllowed, $rejected->reason);
+            self::assertSame('test.txt', $rejected->filename);
+            self::assertSame('text/plain', $rejected->mimeType);
+            self::assertStringContainsString('is not allowed', $rejected->getMessage());
+        }
     }
 
     public function testDeleteRemovesFileFromDiskAndDatabase(): void
@@ -342,6 +383,7 @@ final class FileManagerTest extends TestCase
         $entityManager->expects(self::once())->method('flush');
 
         $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('isValid')->willReturn(true);
         $uploadedFile->method('getClientOriginalName')->willReturn('noext');
         $uploadedFile->method('getClientOriginalExtension')->willReturn('');
         $uploadedFile->method('guessExtension')->willReturn(null);
@@ -359,6 +401,7 @@ final class FileManagerTest extends TestCase
     public function testUploadWithEmptyFileContentThrowsException(): void
     {
         $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('isValid')->willReturn(true);
         $uploadedFile->method('getClientOriginalName')->willReturn('empty.txt');
         $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
         $uploadedFile->method('getSize')->willReturn(5);
@@ -377,6 +420,7 @@ final class FileManagerTest extends TestCase
     public function testUploadWithUnexpectedErrorWrapsException(): void
     {
         $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('isValid')->willReturn(true);
         $uploadedFile->method('getClientOriginalName')->willReturn('test.txt');
         $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
         $uploadedFile->method('getSize')->willReturn(100);
@@ -429,6 +473,7 @@ final class FileManagerTest extends TestCase
         $longName = str_repeat('a', 300).'.txt';
 
         $uploadedFile = $this->createStub(UploadedFile::class);
+        $uploadedFile->method('isValid')->willReturn(true);
         $uploadedFile->method('getClientOriginalName')->willReturn($longName);
         $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
         $uploadedFile->method('getSize')->willReturn(5);

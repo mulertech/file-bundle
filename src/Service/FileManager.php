@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MulerTech\FileBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use MulerTech\FileBundle\Exception\FileRejected;
 use MulerTech\FileBundle\Model\FileInterface;
 use MulerTech\FileBundle\Model\FileUploaderInterface;
 use MulerTech\FileBundle\Storage\DirectoryStrategyInterface;
@@ -179,15 +180,31 @@ class FileManager implements FileManagerInterface
         return self::DEFAULT_ALLOWED_EXTENSIONS;
     }
 
+    /**
+     * A file PHP stopped for its size never reaches the size check below: its reported size is
+     * zero, and its type cannot be read from a temporary file that was never written.
+     */
     private function validateFile(UploadedFile $file): void
     {
+        $filename = $file->getClientOriginalName();
+
+        if (\in_array($file->getError(), [\UPLOAD_ERR_INI_SIZE, \UPLOAD_ERR_FORM_SIZE], true)) {
+            $limit = (int) UploadedFile::getMaxFilesize();
+
+            throw FileRejected::tooLarge($filename, $limit, sprintf('File "%s" exceeds the upload limit of PHP (%s)', $filename, $this->formatFileSize((string) $limit)));
+        }
+
+        if (!$file->isValid()) {
+            throw new FileException(sprintf('File "%s" was not received: %s', $filename, $file->getErrorMessage()));
+        }
+
         if ($file->getSize() > $this->maxFileSize) {
-            throw new FileException(sprintf('File size (%s) exceeds maximum allowed size (%s)', $this->formatFileSize((string) $file->getSize()), $this->formatFileSize((string) $this->maxFileSize)));
+            throw FileRejected::tooLarge($filename, $this->maxFileSize, sprintf('File size (%s) exceeds maximum allowed size (%s)', $this->formatFileSize((string) $file->getSize()), $this->formatFileSize((string) $this->maxFileSize)));
         }
 
         $mimeType = $file->getMimeType();
         if (!\in_array($mimeType, $this->allowedMimeTypes, true)) {
-            throw new FileException(sprintf('File type "%s" is not allowed. Allowed types: %s', $mimeType, implode(', ', $this->allowedMimeTypes)));
+            throw FileRejected::typeNotAllowed($filename, $mimeType, sprintf('File type "%s" is not allowed. Allowed types: %s', $mimeType, implode(', ', $this->allowedMimeTypes)));
         }
     }
 
