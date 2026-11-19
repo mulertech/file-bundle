@@ -95,7 +95,7 @@ class FileController
 `upload()` throws two kinds of `FileException`, which call for different answers:
 
 - `MulerTech\FileBundle\Exception\FileRejected`: the file is too large (for the bundle or for PHP's `upload_max_filesize`) or of a type not allowed. The sender can fix it by sending another file, so tell them why. `reason` (`FileRejectionReason::TooLarge` or `TypeNotAllowed`), `filename`, `maxSize` (bytes) and `mimeType` let you write that message in your own language.
-- any other `FileException`: the server failed to receive or store the file. Nothing the sender does will fix it, so report it as an error.
+- any other `FileException`: the server failed to receive or store the file. Nothing the sender does will fix it, so report it as an error. Its message names the cause (the file, the path) and the bundle journals nothing at `error` level itself: the caller is the one place that reports it, so a fault raises one alert, not one per layer.
 
 ```php
 use MulerTech\FileBundle\Exception\FileRejected;

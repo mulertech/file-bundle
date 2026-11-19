@@ -17,6 +17,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -425,14 +426,18 @@ final class FileManagerTest extends TestCase
         $uploadedFile->method('getClientOriginalExtension')->willReturn('txt');
         $uploadedFile->method('getSize')->willReturn(100);
         $uploadedFile->method('getMimeType')->willReturn('text/plain');
-        $uploadedFile->method('getContent')->willThrowException(new \RuntimeException('disk error'));
+        $cause = new \RuntimeException('disk error');
+        $uploadedFile->method('getContent')->willThrowException($cause);
 
         $fileManager = $this->createFileManager();
 
-        $this->expectException(FileException::class);
-        $this->expectExceptionMessage('Unexpected error during file upload');
-
-        $fileManager->upload($uploadedFile, $this->uploader);
+        try {
+            $fileManager->upload($uploadedFile, $this->uploader);
+            self::fail('An unexpected error must surface as a FileException.');
+        } catch (FileException $failure) {
+            self::assertSame('Unexpected error during file upload of "test.txt": disk error', $failure->getMessage());
+            self::assertSame($cause, $failure->getPrevious());
+        }
     }
 
     public function testDeleteWhenFileNotOnDisk(): void
@@ -481,7 +486,9 @@ final class FileManagerTest extends TestCase
         $uploadedFile->method('getContent')->willReturn('hello');
         $uploadedFile->method('getPathname')->willReturn('/tmp/test.txt');
 
-        $fileManager = $this->createFileManager();
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::never())->method('error');
+        $fileManager = $this->createFileManager(logger: $logger);
 
         $this->expectException(FileException::class);
         $this->expectExceptionMessage('Cannot write file to destination directory');
@@ -536,11 +543,12 @@ final class FileManagerTest extends TestCase
         EntityManagerInterface|MockObject|null $entityManager = null,
         ?int $maxFileSize = null,
         ?array $allowedMimeTypes = null,
+        ?LoggerInterface $logger = null,
     ): FileManager {
         $args = [
             'entityManager' => $entityManager ?? $this->createStub(EntityManagerInterface::class),
             'slugger' => $this->slugger,
-            'logger' => new NullLogger(),
+            'logger' => $logger ?? new NullLogger(),
             'directoryStrategy' => new DefaultDirectoryStrategy(),
             'storageDirectory' => $this->storageDirectory,
             'fileClass' => ConcreteFile::class,

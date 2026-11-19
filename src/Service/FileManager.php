@@ -96,7 +96,7 @@ class FileManager implements FileManagerInterface
 
         $destinationPath = $absoluteDirectory.'/'.$storedFilename;
 
-        $this->writeFile($file, $destinationPath, $originalFilename);
+        $this->writeFile($file, $destinationPath);
 
         $fileEntity = $this->createFileEntity();
         $fileEntity->setFilename($file->getClientOriginalName());
@@ -242,50 +242,36 @@ class FileManager implements FileManagerInterface
         }
     }
 
-    private function writeFile(UploadedFile $uploadedFile, string $destinationPath, string $originalFilename): void
+    /**
+     * Each failure is thrown with its cause and never journaled here: the caller reports it with
+     * the context it alone knows, and a fault journaled twice raises two alerts.
+     */
+    private function writeFile(UploadedFile $uploadedFile, string $destinationPath): void
     {
         try {
             $fileContent = $uploadedFile->getContent();
-
-            if ('' === $fileContent) {
-                $this->logger->error('Failed to read uploaded file content', [
-                    'original_filename' => $originalFilename,
-                    'temp_path' => $uploadedFile->getPathname(),
-                ]);
-                throw new FileException('Cannot read uploaded file content.');
-            }
-
-            $bytesWritten = @file_put_contents($destinationPath, $fileContent);
-
-            if (false === $bytesWritten) {
-                $this->logger->error('Failed to write file to destination', [
-                    'destination_path' => $destinationPath,
-                ]);
-                throw new FileException('Cannot write file to destination directory.');
-            }
-
-            if (!$this->fileExistsAtPath($destinationPath)) {
-                throw new FileException('File was not saved correctly.');
-            }
-
-            $this->logger->info('File written to disk', [
-                'destination_path' => $destinationPath,
-                'bytes_written' => $bytesWritten,
-            ]);
-        } catch (FileException $e) {
-            $this->logger->error('Failed to upload file', [
-                'filename' => $originalFilename,
-                'destination_path' => $destinationPath,
-                'error' => $e->getMessage(),
-            ]);
-            throw $e;
         } catch (\Throwable $e) {
-            $this->logger->error('Unexpected error during file upload', [
-                'filename' => $originalFilename,
-                'error' => $e->getMessage(),
-            ]);
-            throw new FileException('Unexpected error during file upload: '.$e->getMessage());
+            throw new FileException(sprintf('Unexpected error during file upload of "%s": %s', $uploadedFile->getClientOriginalName(), $e->getMessage()), 0, $e);
         }
+
+        if ('' === $fileContent) {
+            throw new FileException(sprintf('Cannot read uploaded file content of "%s" from "%s".', $uploadedFile->getClientOriginalName(), $uploadedFile->getPathname()));
+        }
+
+        $bytesWritten = @file_put_contents($destinationPath, $fileContent);
+
+        if (false === $bytesWritten) {
+            throw new FileException(sprintf('Cannot write file to destination directory: "%s".', $destinationPath));
+        }
+
+        if (!$this->fileExistsAtPath($destinationPath)) {
+            throw new FileException(sprintf('File was not saved correctly: "%s" is missing after writing.', $destinationPath));
+        }
+
+        $this->logger->info('File written to disk', [
+            'destination_path' => $destinationPath,
+            'bytes_written' => $bytesWritten,
+        ]);
     }
 
     protected function fileExistsAtPath(string $path): bool
