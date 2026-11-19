@@ -1,5 +1,12 @@
 # Release notes for file-bundle
 
+## v1.2.1 - 2026-11-19
+
+Fixes:
+
+- FileManager::delete() removes the database row before the file on disk. A row still referenced by a foreign key made the flush throw after the file was already unlinked, leaving a row without content; the content now stays on disk whenever the database refuses the deletion.
+- The deletion log entries carry the id of the deleted file, which Doctrine clears on removal.
+
 ## v1.2.0 - 2026-11-09
 
 A bundle can choose where its files are stored, the same way on every site.
