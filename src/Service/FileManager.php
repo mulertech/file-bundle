@@ -118,22 +118,28 @@ class FileManager implements FileManagerInterface
         return $fileEntity;
     }
 
+    /**
+     * The row goes first: a row still referenced elsewhere makes the flush throw, and the
+     * content must still be on disk when that happens. Doctrine clears a generated id on
+     * removal, hence the id read beforehand.
+     */
     public function delete(FileInterface $file): void
     {
+        $fileId = $file->getId();
         $absolutePath = $this->storageDirectory.'/'.$file->getFilepath();
-
-        if (file_exists($absolutePath) && !@unlink($absolutePath)) {
-            $this->logger->warning('Failed to delete file from filesystem', [
-                'file_id' => $file->getId(),
-                'filepath' => $absolutePath,
-            ]);
-        }
 
         $this->entityManager->remove($file);
         $this->entityManager->flush();
 
+        if (file_exists($absolutePath) && !@unlink($absolutePath)) {
+            $this->logger->warning('Failed to delete file from filesystem', [
+                'file_id' => $fileId,
+                'filepath' => $absolutePath,
+            ]);
+        }
+
         $this->logger->info('File deleted successfully', [
-            'file_id' => $file->getId(),
+            'file_id' => $fileId,
             'filename' => $file->getFilename(),
         ]);
     }

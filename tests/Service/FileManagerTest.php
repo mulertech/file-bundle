@@ -140,6 +140,30 @@ final class FileManagerTest extends TestCase
         self::assertFileDoesNotExist($absolutePath);
     }
 
+    public function testDeleteKeepsFileOnDiskWhenDatabaseRefuses(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::once())->method('persist');
+        $entityManager->expects(self::exactly(2))->method('flush')->willReturnOnConsecutiveCalls(
+            null,
+            self::throwException(new \RuntimeException('Foreign key violation')),
+        );
+        $entityManager->expects(self::once())->method('remove');
+
+        $fileManager = $this->createFileManager($entityManager);
+        $file = $fileManager->upload($this->createTempUploadedFile('test.txt', 'text/plain', 'content'), $this->uploader);
+        $absolutePath = $fileManager->getAbsolutePath($file);
+
+        try {
+            $fileManager->delete($file);
+            self::fail('The database refusal must reach the caller.');
+        } catch (\RuntimeException $refusal) {
+            self::assertSame('Foreign key violation', $refusal->getMessage());
+        }
+
+        self::assertFileExists($absolutePath);
+    }
+
     public function testFileExistsOnDisk(): void
     {
         $entityManager = $this->createMock(EntityManagerInterface::class);
