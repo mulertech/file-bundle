@@ -1,5 +1,21 @@
 # Release notes for file-bundle
 
+## v2.0.0 - 2026-11-19
+
+BREAKING CHANGES:
+
+- The file manager no longer journals upload failures at error level before throwing: the caller reports them. A caller catching `FileException` without logging must now log it, or its storage faults go unreported.
+
+New features:
+
+- `FileRejected` (extends `FileException`) is thrown when a file is too large or of a type not allowed, with its `reason`, `filename`, `maxSize` and `mimeType`, so a caller can tell a rejection the sender can fix from a server fault.
+- A file stopped by PHP's `upload_max_filesize` is rejected as too large, instead of failing the type check.
+- A file not received for a server reason fails with PHP's own explanation.
+
+Fixes:
+
+- A storage failure names the file and the path in its message and keeps the original exception as its previous one.
+
 ## v1.2.1 - 2026-11-19
 
 Fixes:
